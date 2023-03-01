@@ -90,6 +90,7 @@ class SQLiteRepository(AbstractRepository[T]):
             cur = con.cursor()
             cur.execute(f'DELETE FROM {self.table_name} where pk = {pk}')
         con.close()
+
     def update(self, obj: T) -> None:
         if obj.pk == 0:
             raise ValueError('attempt to update object with unknown primary key')
