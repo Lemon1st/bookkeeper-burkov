@@ -90,3 +90,48 @@ class SQLiteRepository(AbstractRepository[T]):
             cur = con.cursor()
             cur.execute(f'DELETE FROM {self.table_name} where pk = {pk}')
         con.close()
+    def update(self, obj: T) -> None:
+        if obj.pk == 0:
+            raise ValueError('attempt to update object with unknown primary key')
+        update_strings = [f'{name} = ?' for name in self.fields.keys()]
+        if len(update_strings) == 0:
+            return
+        values = [getattr(obj, x) for x in self.fields]
+        with self.connect() as con:
+            cur = con.cursor()
+            cur.execute(
+                f'UPDATE {self.table_name} SET {", ".join(update_strings)} WHERE pk = ?',
+                values + [obj.pk]
+            )
+        con.close()
+
+    def delete(self, pk: int) -> None:
+        with self.connect() as con:
+            cur = con.cursor()
+            cur.execute(
+                f'DELETE FROM {self.table_name} WHERE pk = ?',
+                [pk]
+            )
+            deleted_count = cur.rowcount
+        con.close()
+        if deleted_count == 0:
+            raise KeyError('attempt to delete unexistent object')
+
+
+    def connect(self) -> Connection:
+        return sqlite3.connect(
+            self.db_file, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+
+    @staticmethod
+    def _resolve_type(obj_type: type) -> str:
+        if issubclass(UnionType, obj_type):
+            obj_type = get_args(obj_type)
+        if issubclass(str, obj_type):
+            return 'TEXT'
+        if issubclass(int, obj_type):
+            return 'INTEGER'
+        if issubclass(float, obj_type):
+            return 'REAL'
+        if issubclass(datetime, obj_type):
+            return 'TIMESTAMP'
+        return 'TEXT'
