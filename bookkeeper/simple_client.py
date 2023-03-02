@@ -8,8 +8,7 @@ from bookkeeper.repository.memory_repository import MemoryRepository
 from bookkeeper.repository.sqlite_repository import SQLiteRepository
 from bookkeeper.utils import read_tree
 
-
-cat_repo = SQLiteRepository[Category]('test.db', Category)  # TODO: репозиторий sqlite пока не реализован
+cat_repo = SQLiteRepository[Category]('database.db', Category)
 exp_repo = MemoryRepository[Expense]()
 
 cats = '''
@@ -22,7 +21,7 @@ cats = '''
 одежда
 '''.splitlines()
 
-# Category.create_from_tree(read_tree(cats), cat_repo)  # TODO: не выполнять при каждом запуске
+Category.create_from_tree(read_tree(cats), cat_repo)
 
 while True:
     try:
