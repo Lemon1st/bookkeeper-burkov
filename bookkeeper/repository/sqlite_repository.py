@@ -1,11 +1,22 @@
-import sqlite3
+"""
+Модуль описывает репозиторий, работающий с SQLite3
+"""
 
+import sqlite3
+from datetime import datetime
 from inspect import get_annotations
+from sqlite3 import Connection
+from types import UnionType
+from typing import Any, get_args
+
 from bookkeeper.repository.abstract_repository import AbstractRepository, T
-from typing import Any
 
 
 class SQLiteRepository(AbstractRepository[T]):
+    """
+    Репозиторий, работающий с SQLite3. Хранит данные в базе данных.
+    """
+
     def __init__(self, db_file: str, cls: type) -> None:
         self.db_file = db_file
         self.table_name = cls.__name__.lower()
@@ -28,6 +39,24 @@ class SQLiteRepository(AbstractRepository[T]):
             cur.execute(create_sql)
         con.close()
 
+    def connect(self) -> Connection:
+        return sqlite3.connect(
+            self.db_file, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
+
+    @staticmethod
+    def _resolve_type(obj_type: type) -> str:
+        if issubclass(UnionType, obj_type):
+            obj_type = get_args(obj_type)
+        if issubclass(str, obj_type):
+            return 'TEXT'
+        if issubclass(int, obj_type):
+            return 'INTEGER'
+        if issubclass(float, obj_type):
+            return 'REAL'
+        if issubclass(datetime, obj_type):
+            return 'TIMESTAMP'
+        return 'TEXT'
+
     def add(self, obj: T) -> int:
         if getattr(obj, 'pk', None) != 0:
             raise ValueError(f'trying to add object {obj} with filled `pk` attribute')
@@ -47,13 +76,6 @@ class SQLiteRepository(AbstractRepository[T]):
             obj.pk = pk if pk is not None else 0
         con.close()
         return obj.pk
-
-    def __generate_object(self, db_row: tuple) -> T:
-        obj = self.cls(self.fields)
-        for field, value in zip(self.fields, db_row[1:]):
-            setattr(obj, field, value)
-        obj.pk = db_row[0]
-        return obj
 
     def get(self, pk: int) -> T | None:
         with self.connect() as con:
@@ -81,17 +103,6 @@ class SQLiteRepository(AbstractRepository[T]):
         return res
 
     def update(self, obj: T) -> None:
-        """ Обновить данные об объекте. Объект должен содержать поле pk. """
-        pass
-
-    def delete(self, pk: int) -> None:
-        """ Удалить запись """
-        with sqlite3.connect(self.db_file) as con:
-            cur = con.cursor()
-            cur.execute(f'DELETE FROM {self.table_name} where pk = {pk}')
-        con.close()
-
-    def update(self, obj: T) -> None:
         if obj.pk == 0:
             raise ValueError('attempt to update object with unknown primary key')
         update_strings = [f'{name} = ?' for name in self.fields.keys()]
@@ -117,22 +128,3 @@ class SQLiteRepository(AbstractRepository[T]):
         con.close()
         if deleted_count == 0:
             raise KeyError('attempt to delete unexistent object')
-
-
-    def connect(self) -> Connection:
-        return sqlite3.connect(
-            self.db_file, detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES)
-
-    @staticmethod
-    def _resolve_type(obj_type: type) -> str:
-        if issubclass(UnionType, obj_type):
-            obj_type = get_args(obj_type)
-        if issubclass(str, obj_type):
-            return 'TEXT'
-        if issubclass(int, obj_type):
-            return 'INTEGER'
-        if issubclass(float, obj_type):
-            return 'REAL'
-        if issubclass(datetime, obj_type):
-            return 'TIMESTAMP'
-        return 'TEXT'
